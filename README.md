@@ -1,0 +1,181 @@
+## AI
+https://claude.ai/chat/08ab017a-7009-4ce3-8578-fa652c2cac30
+
+
+## 起動
+```
+docker compose up
+```
+
+```
+docker compose exec api bash
+```
+
+## 環境構築
+```
+docker run --rm -v $(pwd):/app -w /app ruby:3.2.0 bash -c "
+  apt-get update -qq &&
+  apt-get install -y nodejs postgresql-client &&
+  gem install rails -v 7.2.2 &&
+  rails _7.2.2_ new . --api --database=postgresql --skip-git --force
+"
+```
+
+```
+touch docker-compose.yml
+```
+以下を記載。
+```
+services:
+  db:
+    image: postgres:15
+    container_name: rails_postgres
+    environment:
+      POSTGRES_DB: myapp_development
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+
+  api:
+    build: .
+    container_name: rails_api
+    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0"
+    volumes:
+      - .:/app
+      - bundle_cache:/usr/local/bundle
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/myapp_development
+      - RAILS_ENV=development
+    networks:
+      - app-network
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+  bundle_cache:
+
+networks:
+  app-network:
+    driver: bridge
+```
+
+```
+docker compose up
+```
+
+```
+docker compose exec api bash
+```
+
+```
+rails db:create
+```
+
+RSpecの初期化
+```
+bundle exec rails generate rspec:install
+```
+
+## コンテナ内で打つコマンド集
+
+```ruby
+rails generate migration CreateTodos
+# 編集後に以下を実行
+rails db:migrate
+```
+
+rails generate controller api/v1/todos
+rails generate serializer todo
+
+コード検査
+```
+rubocop -A
+```
+
+シードデータ作成
+```
+rails db:seed
+```
+
+## todoのエンドポイントをcurlで叩くためのコマンド集
+
+```
+# 1. 全TODOを取得 (GET /api/v1/todos)
+curl -X GET http://localhost:3000/api/v1/todos
+
+# 2. 完了済みTODOのみ取得
+curl -X GET "http://localhost:3000/api/v1/todos?status=completed"
+
+# 3. 未完了TODOのみ取得
+curl -X GET "http://localhost:3000/api/v1/todos?status=pending"
+
+# 4. 特定のTODOを取得 (GET /api/v1/todos/:id)
+curl -X GET http://localhost:3000/api/v1/todos/1
+
+# 5. 新しいTODOを作成 (POST /api/v1/todos)
+curl -X POST http://localhost:3000/api/v1/todos \
+  -H "Content-Type: application/json" \
+  -d '{"todo": {"title": "新しいタスク", "completed": false}}'
+
+# 6. TODOを更新 (PATCH /api/v1/todos/:id)
+curl -X PATCH http://localhost:3000/api/v1/todos/1 \
+  -H "Content-Type: application/json" \
+  -d '{"todo": {"title": "更新されたタスク", "completed": true}}'
+
+# 7. TODOの完了状態を切り替え (PATCH /api/v1/todos/:id/toggle)
+curl -X PATCH http://localhost:3000/api/v1/todos/1/toggle
+
+# 8. TODOを削除 (DELETE /api/v1/todos/:id)
+curl -X DELETE http://localhost:3000/api/v1/todos/1
+
+# レスポンスを見やすくするオプション
+# -s: サイレントモード, -S: エラー時は表示, | jq: JSONを整形
+curl -sSL http://localhost:3000/api/v1/todos | jq
+
+# ヘルスチェックエンドポイントもテスト
+curl -X GET http://localhost:3000/health
+```
+
+## テスト(RSpec)を叩くコマンド
+
+### 警告を消すためのコマンド
+```
+bin/rails db:environment:set RAILS_ENV=test
+```
+
+### 特定のファイルを実行する場合
+
+```
+# 基本的なコマンド
+bundle exec rspec spec/requests/api/v1/todos_spec.rb
+
+# より詳細な出力で実行
+bundle exec rspec spec/requests/api/v1/todos_spec.rb --format documentation
+
+# 失敗時に詳細を表示
+bundle exec rspec spec/requests/api/v1/todos_spec.rb --format documentation --backtrace
+```
+
+### 特定のテストケースのみ実行する場合
+
+```
+# 特定のdescribeブロックのみ実行
+bundle exec rspec spec/requests/api/v1/todos_spec.rb -e "GET /api/v1/todos"
+
+# 特定のcontextのみ実行
+bundle exec rspec spec/requests/api/v1/todos_spec.rb -e "全てのTODOを取得する場合"
+
+# 行番号を指定して実行（例：50行目のテスト）
+bundle exec rspec spec/requests/api/v1/todos_spec.rb:55
+```
