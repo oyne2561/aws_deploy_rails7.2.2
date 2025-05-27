@@ -79,7 +79,7 @@ docker compose exec api bash
 ```
 
 ```
-rails db:create
+bundle exec rails db:create
 ```
 
 RSpecの初期化
@@ -88,24 +88,25 @@ bundle exec rails generate rspec:install
 ```
 
 ## コンテナ内で打つコマンド集
+`bundle exec` をつけること
 
 ```ruby
-rails generate migration CreateTodos
+bundle exec rails generate migration CreateTodos
 # 編集後に以下を実行
-rails db:migrate
+bundle exec  rails db:migrate
 ```
 
-rails generate controller api/v1/todos
-rails generate serializer todo
+bundle exec　rails generate controller api/v1/todos
+bundle exec　rails generate serializer todo
 
 コード検査
 ```
-rubocop -A
+bundle exec　rubocop -A
 ```
 
 シードデータ作成
 ```
-rails db:seed
+bundle exec rails db:seed
 ```
 
 ## todoのエンドポイントをcurlで叩くためのコマンド集
@@ -151,7 +152,7 @@ curl -X GET http://localhost:3000/health
 
 ### 警告を消すためのコマンド
 ```
-bin/rails db:environment:set RAILS_ENV=test
+bundle exec rails db:environment:set RAILS_ENV=test
 ```
 
 ### 特定のファイルを実行する場合
