@@ -1,0 +1,34 @@
+FROM ruby:3.2.0
+
+# 本番用パッケージをインストール
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Gemfileをコピーしてインストール
+COPY Gemfile Gemfile.lock ./
+RUN bundle config set --local deployment 'true' && \
+    bundle config set --local without 'development test' && \
+    bundle install
+
+# アプリケーションコードをコピー
+COPY . .
+
+# エントリーポイントスクリプトをコピー
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# 本番環境変数
+ENV RAILS_ENV=production
+ENV RAILS_SERVE_STATIC_FILES=true
+ENV RAILS_LOG_TO_STDOUT=true
+
+EXPOSE 3000
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]

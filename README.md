@@ -1,7 +1,3 @@
-## AI
-https://claude.ai/chat/08ab017a-7009-4ce3-8578-fa652c2cac30
-
-
 ## 起動
 ```
 docker compose up
@@ -179,4 +175,31 @@ bundle exec rspec spec/requests/api/v1/todos_spec.rb -e "全てのTODOを取得�
 
 # 行番号を指定して実行（例：50行目のテスト）
 bundle exec rspec spec/requests/api/v1/todos_spec.rb:55
+```
+
+## ECRに本番のDocker Imageを上げる手順
+
+事前準備: マスターキーとシークレットキーベースを取得して、ssmに入力する
+```
+# 既存の暗号化ファイルを削除
+rm config/credentials.yml.enc
+
+# 新しい認証情報ファイルを作成（新しいmaster.keyも自動生成される）
+EDITOR="vi" bundle exec rails credentials:edit
+
+# シークレットキーベースを生成
+bundle exec rails secret
+```
+
+```
+aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 0649363938393316.dkr.ecr.ap-northeast-1.amazonaws.com
+```
+
+```
+docker build -f Dockerfile.prod -t todo-app-api .
+```
+
+```
+docker tag todo-app-api:latest 0649363938393316.dkr.ecr.ap-northeast-1.amazonaws.com/todo-app-api:latest
+docker push 0649363938393316.dkr.ecr.ap-northeast-1.amazonaws.com/todo-app-api:latest
 ```
