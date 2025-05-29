@@ -1,24 +1,39 @@
 #!/bin/bash
 set -e
 
-# データベースの準備ができるまで待機
-echo "Waiting for database to be ready..."
-until bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')" >/dev/null 2>&1; do
-  echo "Database not ready, retrying in 2 seconds..."
-  sleep 2
-done
+echo ""
+echo "=== 環境変数確認 ==="
+echo "RAILS_ENV: $RAILS_ENV"
+echo "DB_HOST: $DB_HOST"
+echo "DB_PORT: $DB_PORT"
+echo "DB_NAME: $DB_NAME"
+echo "DB_USERNAME: $DB_USERNAME"
+echo "DB_PASSWORD: $([ -n "$DB_PASSWORD" ] && echo '[設定済み]' || echo '[未設定]')"
 
-echo "Database is ready!"
+echo ""
+echo "=== 環境変数がRailsで利用可能か確認 ==="
+bundle exec rails runner "
+puts 'Environment variables in Rails:'
+puts 'RAILS_ENV: ' + Rails.env
+puts 'DB_HOST: ' + ENV['DB_HOST'].to_s
+puts 'DB_PORT: ' + ENV['DB_PORT'].to_s
+puts 'DB_NAME: ' + ENV['DB_NAME'].to_s
+puts 'DB_USERNAME: ' + ENV['DB_USERNAME'].to_s
+puts 'DB_PASSWORD: ' + (ENV['DB_PASSWORD'] ? '[SET]' : '[NOT SET]')
+"
 
-# マイグレーションを実行
-if [ "$RAILS_ENV" = "production" ]; then
-  echo "Running database migrations..."
-  bundle exec rails db:migrate
+echo ""
+echo "=== データベースマイグレーション実行 ==="
+echo "マイグレーションを実行しています..."
+bundle exec rails db:migrate
 
-  echo "Running database seeds..."
-  bundle exec rails db:seed
-fi
+echo ""
+echo "=== シードデータ投入 ==="
+echo "シードデータを投入しています..."
+bundle exec rails db:seed
 
-echo "Starting application..."
-# 渡されたコマンドを実行
+echo "docker-entrypoint.shが読み込まれました。"
+
+# exec "$@" により、CMD で指定されたコマンド（Rails サーバー）が実行されます。
+# この記述がないと、初期化は成功するが Rails サーバーが起動せず、ヘルスチェックが失敗し続けます。
 exec "$@"

@@ -1,11 +1,19 @@
 FROM ruby:3.2.0
 
 # 本番用パッケージをインストール
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && \
+    apt-get install -y \
     build-essential \
     libpq-dev \
     nodejs \
     npm \
+    git \
+    curl \
+    # ネットワーク診断ツール
+    dnsutils \
+    netcat-openbsd \
+    telnet \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -31,4 +39,5 @@ ENV RAILS_LOG_TO_STDOUT=true
 EXPOSE 3000
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
+# CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]

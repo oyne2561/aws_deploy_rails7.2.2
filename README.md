@@ -203,3 +203,46 @@ docker build -f Dockerfile.prod -t todo-app-api .
 docker tag todo-app-api:latest 0649363938393316.dkr.ecr.ap-northeast-1.amazonaws.com/todo-app-api:latest
 docker push 0649363938393316.dkr.ecr.ap-northeast-1.amazonaws.com/todo-app-api:latest
 ```
+
+
+## AWS Fargate時にはまったこと
+
+### タスクのログでRailsコマンドが落ちる。
+パラメーターストアの`RAILS_MASTER_KEY`と`SECRET_KEY_BASE`がダミーデータのままになっている。
+変えたらうまく行く。
+
+### マイグレーションまでできたがすぐにタスクが落ちる。
+`docker-entrypoint.sh`
+```
+exec "$@"
+```
+exec "$@" により、CMD で指定されたコマンド（Rails サーバー）が実行されます。
+この記述がないと、初期化は成功するが Rails サーバーが起動せず、ヘルスチェックが失敗し続けます。
+
+### ヘルスチェックが落ちる。
+ターゲットヘルス状態の確認
+
+```
+aws elbv2 describe-target-health --target-group-arn arn:aws:elasticloadbalancing:ap-northeast-1:0325085075316:targetgroup/todo-app-api-tg/f0e3a0e95672a8ed
+```
+
+```
+"TargetHealth": {
+    "State": "unhealthy",
+    "Reason": "Target.ResponseCodeMismatch",
+    "Description": "Health checks failed with these codes: [301]"
+},
+```
+HTTPステータス 301 = Permanent Redirect
+Rails が /health への HTTP リクエストを HTTPS にリダイレクトしている可能性があります。
+
+**解決の方法**
+`production.rb`
+以下二つを設定する。
+```
+# HTTPSを強制しない
+config.force_ssl = false
+
+# ALBがHTTPS終端を処理するため
+config.assume_ssl = false
+```
