@@ -49,6 +49,13 @@ class Api::V1::TodosController < ApplicationController
     render json: @todo
   end
 
+  def new_action
+    render json: {
+      status: "ok",
+      message: "Github Actions New Action"
+    }, status: :ok
+  end
+
   private
 
   def set_todo

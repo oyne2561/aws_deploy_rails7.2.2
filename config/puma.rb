@@ -26,7 +26,7 @@ before_fork do
 end
 
 # プロセス名を設定
-tag 'oolab-api'
+tag "oolab-api"
 
 # PIDファイルの場所
 pidfile ENV.fetch("PIDFILE", "tmp/pids/server.pid")

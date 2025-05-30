@@ -10,6 +10,10 @@ Rails.application.routes.draw do
         member do
           patch :toggle
         end
+
+        collection do
+          get :new_action
+        end
       end
     end
   end

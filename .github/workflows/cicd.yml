@@ -1,0 +1,126 @@
+# ワークフローの名前を設定
+name: CI/CD Pipeline
+
+# このワークフローがいつ実行されるかを定義
+on:
+  push:
+    branches: [ main, develop ]  # mainまたはdevelopブランチにプッシュされた時
+
+# 環境変数の定義（全てのジョブで使用可能）
+env:
+  AWS_REGION: ap-northeast-1                 # AWSリージョン（東京）
+  ECR_REPOSITORY: todo-app-api               # ECR（Docker画像保存場所）のリポジトリ名
+  ECS_SERVICE: todo-app-api-service          # ECS（コンテナ実行環境）のサービス名
+  ECS_CLUSTER: todo-app-api-cluster          # ECSクラスター名
+  ECS_TASK_DEFINITION: todo-app-api-task     # ECSタスク定義名
+
+# ジョブの定義（並列または順次実行される処理の単位）
+jobs:
+  # 1つ目のジョブ：テスト実行
+  test:
+    runs-on: ubuntu-latest  # Ubuntu最新版の仮想マシンで実行
+
+    # ステップの定義（順次実行される処理）
+    steps:
+    # Step 1: ソースコードをチェックアウト（取得）
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Step 2: Ruby環境のセットアップ
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.2.0    # Ruby 3.2.0を使用
+        bundler-cache: false   # キャッシュを無効化して手動でbundle install
+
+    # Step 3: プラットフォームの追加とbundle install
+    - name: Install dependencies
+      run: |
+        # 現在のプラットフォーム（x86_64-linux）をGemfile.lockに追加
+        bundle lock --add-platform x86_64-linux
+        # 依存関係をインストール
+        bundle install --jobs 4
+
+    # Step 4: コード品質チェック（RuboCop）
+    - name: Run RuboCop (Lint)
+      run: bundle exec rubocop
+
+     # Step 5: テスト実行（RSpec）- データベース接続なし
+    # - name: Run RSpec tests
+    #   env:
+    #     RAILS_ENV: test
+    #     DATABASE_URL: ""                    # データベースURLを空にしてDB接続を無効化
+    #     DATABASE_CLEANER_ALLOW_REMOTE_DATABASE_URL: true
+    #     DISABLE_DATABASE_ENVIRONMENT_CHECK: 1
+    #     SKIP_DB_SETUP: true                # データベースセットアップをスキップ
+    #   run: |
+    #     # ActiveRecordを使用しないテスト実行
+    #     bundle exec rspec spec/requests/api/v1/todos_spec.rb \
+    #       --require spec_helper \
+    #       --no-drb \
+    #       --format documentation
+
+  # 2つ目のジョブ：デプロイ実行
+  deploy:
+    needs: test  # testジョブが成功した場合のみ実行
+    runs-on: ubuntu-latest
+    # mainブランチへのプッシュの場合のみ実行
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    # Step 1: ソースコードをチェックアウト
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Step 2: AWS認証情報の設定
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}     
+        aws-region: ${{ env.AWS_REGION }}
+
+    # Step 3: Amazon ECRにログイン
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # Step 4: Docker ImageをビルドしてECRにプッシュ
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}  # GitコミットのSHAをタグとして使用
+      run: |
+        # Docker画像をビルドしてECRにプッシュ
+        docker build -f Dockerfile.prod -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        # latestタグも付けてプッシュ
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        # 次のステップで使用するため、画像URIを出力
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    # Step 5: 現在のECSタスク定義をダウンロード
+    - name: Download task definition
+      run: |
+        aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION \
+          --query taskDefinition > task-definition.json
+
+    # Step 6: タスク定義に新しいDocker Imageを設定
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition.json
+        container-name: todo-app-api
+        image: ${{ steps.build-image.outputs.image }}
+
+    # Step 7: ECSサービスに新しいタスク定義をデプロイ
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true  # サービスが安定するまで待機
