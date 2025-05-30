@@ -10,7 +10,7 @@ on:
 env:
   AWS_REGION: ap-northeast-1                 # AWSリージョン（東京）
   ECR_REPOSITORY: todo-app-api               # ECR（Docker画像保存場所）のリポジトリ名
-  ECS_SERVICE: todo-app-api-service          # ECS（コンテナ実行環境）のサービス名
+  ECS_SERVICE: todo-app-api-task-service          # ECS（コンテナ実行環境）のサービス名
   ECS_CLUSTER: todo-app-api-cluster          # ECSクラスター名
   ECS_TASK_DEFINITION: todo-app-api-task     # ECSタスク定義名
 
@@ -26,39 +26,16 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # # Step 2: Ruby環境のセットアップ
-    # - name: Set up Ruby
-    #   uses: ruby/setup-ruby@v1
-    #   with:
-    #     ruby-version: 3.2.0    # Ruby 3.2.0を使用
-    #     bundler-cache: false   # キャッシュを無効化して手動でbundle install
+    # Step 2: Ruby環境のセットアップ
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 3.2.0    # Ruby 3.2.0を使用
+        bundler-cache: true   # キャッシュを無効化して手動でbundle install
 
-    # # Step 3: プラットフォームの追加とbundle install
-    # - name: Install dependencies
-    #   run: |
-    #     # 現在のプラットフォーム（x86_64-linux）をGemfile.lockに追加
-    #     bundle lock --add-platform x86_64-linux
-    #     # 依存関係をインストール
-    #     bundle install --jobs 4
-
-    # # Step 4: コード品質チェック（RuboCop）
-    # - name: Run RuboCop (Lint)
-    #   run: bundle exec rubocop
-
-     # Step 5: テスト実行（RSpec）- データベース接続なし
-    # - name: Run RSpec tests
-    #   env:
-    #     RAILS_ENV: test
-    #     DATABASE_URL: ""                    # データベースURLを空にしてDB接続を無効化
-    #     DATABASE_CLEANER_ALLOW_REMOTE_DATABASE_URL: true
-    #     DISABLE_DATABASE_ENVIRONMENT_CHECK: 1
-    #     SKIP_DB_SETUP: true                # データベースセットアップをスキップ
-    #   run: |
-    #     # ActiveRecordを使用しないテスト実行
-    #     bundle exec rspec spec/requests/api/v1/todos_spec.rb \
-    #       --require spec_helper \
-    #       --no-drb \
-    #       --format documentation
+    # Step 3: コード品質チェック（RuboCop）
+    - name: Run RuboCop (Lint)
+      run: bundle exec rubocop
 
   # 2つ目のジョブ：デプロイ実行
   deploy:
@@ -106,6 +83,18 @@ jobs:
       run: |
         aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION \
           --query taskDefinition > task-definition.json
+    
+    # Step 5.5: タスク定義のアーキテクチャをX86_64に修正
+    - name: Fix task definition architecture
+      run: |
+        # JSONファイルでcpuArchitectureをX86_64に変更
+        jq '.runtimePlatform.cpuArchitecture = "X86_64"' task-definition.json > task-definition-fixed.json
+        # 修正されたファイルに置き換え
+        mv task-definition-fixed.json task-definition.json
+        
+        # 確認のため修正内容を表示
+        echo "=== 修正されたruntimePlatform ==="
+        jq '.runtimePlatform' task-definition.json
 
     # Step 6: タスク定義に新しいDocker Imageを設定
     - name: Fill in the new image ID in the Amazon ECS task definition

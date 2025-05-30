@@ -52,7 +52,7 @@ class Api::V1::TodosController < ApplicationController
   def new_action
     render json: {
       status: "ok",
-      message: "Github Actions New Action"
+      message: "Github Actions New Action Version 2!!"
     }, status: :ok
   end
 

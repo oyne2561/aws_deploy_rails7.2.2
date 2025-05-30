@@ -22,10 +22,11 @@ WORKDIR /app
 
 # Gemfileをコピーしてプラットフォーム設定とインストール
 COPY Gemfile Gemfile.lock ./
-RUN bundle lock --add-platform x86_64-linux && \
-    bundle config set --local deployment 'true' && \
-    bundle config set --local without 'development test' && \
-    bundle install
+
+# プラットフォーム問題を完全に回避する方法
+RUN bundle config set --local without 'development test' && \
+    bundle lock --add-platform x86_64-linux && \
+    bundle install --jobs 4
 
 # アプリケーションコードをコピー
 COPY . .

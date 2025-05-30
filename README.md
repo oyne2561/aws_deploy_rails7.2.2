@@ -205,7 +205,7 @@ docker push 0649363938393316.dkr.ecr.ap-northeast-1.amazonaws.com/todo-app-api:l
 ```
 
 
-## AWS Fargate時にはまったこと
+## AWS Fargate デプロイ時にはまったこと
 
 ### タスクのログでRailsコマンドが落ちる。
 パラメーターストアの`RAILS_MASTER_KEY`と`SECRET_KEY_BASE`がダミーデータのままになっている。
@@ -246,3 +246,42 @@ config.force_ssl = false
 # ALBがHTTPS終端を処理するため
 config.assume_ssl = false
 ```
+
+## Github Actionsで遭遇したエラー
+x86_64しか`ubuntu-latest`マシンでは、
+ローカルでGemfile.lockを修正する。
+```
+bundle lock --add-platform x86_64-linux
+```
+実行後の`Gemfile.lock`
+```
+PLATFORMS
+  aarch64-linux   # ARM64
+  x86_64-linux    # Intel/AMD 64bit ← 新しく追加！
+```
+
+`Dockerfile.prod`の修正。
+```
+# ❌ 間違った順序（deploymentモードが先だとlockファイル変更不可）
+RUN bundle config set --local deployment 'true' && \
+    bundle lock --add-platform x86_64-linux  # エラー！
+
+# ✅ 正しい順序
+RUN bundle config set --local without 'development test' && \
+    bundle lock --add-platform x86_64-linux && \  # 先にプラットフォーム追加
+    bundle config set --local deployment 'true' && \  # 後でdeploymentモード
+    bundle install --jobs 4
+```
+
+ECSタスク定義をX86_64に変更。cicd.yml
+```
+
+```
+
+
+## タスク定義のjsonファイルをAWSから取得する方法
+```
+aws ecs describe-task-definition --task-definition todo-app-api-task \
+  --query taskDefinition > task-definition.json
+```
+
