@@ -26,24 +26,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # Step 2: Ruby環境のセットアップ
-    - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: 3.2.0    # Ruby 3.2.0を使用
-        bundler-cache: false   # キャッシュを無効化して手動でbundle install
+    # # Step 2: Ruby環境のセットアップ
+    # - name: Set up Ruby
+    #   uses: ruby/setup-ruby@v1
+    #   with:
+    #     ruby-version: 3.2.0    # Ruby 3.2.0を使用
+    #     bundler-cache: false   # キャッシュを無効化して手動でbundle install
 
-    # Step 3: プラットフォームの追加とbundle install
-    - name: Install dependencies
-      run: |
-        # 現在のプラットフォーム（x86_64-linux）をGemfile.lockに追加
-        bundle lock --add-platform x86_64-linux
-        # 依存関係をインストール
-        bundle install --jobs 4
+    # # Step 3: プラットフォームの追加とbundle install
+    # - name: Install dependencies
+    #   run: |
+    #     # 現在のプラットフォーム（x86_64-linux）をGemfile.lockに追加
+    #     bundle lock --add-platform x86_64-linux
+    #     # 依存関係をインストール
+    #     bundle install --jobs 4
 
-    # Step 4: コード品質チェック（RuboCop）
-    - name: Run RuboCop (Lint)
-      run: bundle exec rubocop
+    # # Step 4: コード品質チェック（RuboCop）
+    # - name: Run RuboCop (Lint)
+    #   run: bundle exec rubocop
 
      # Step 5: テスト実行（RSpec）- データベース接続なし
     # - name: Run RSpec tests

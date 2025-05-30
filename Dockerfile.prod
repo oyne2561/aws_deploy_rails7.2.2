@@ -14,22 +14,25 @@ RUN apt-get update && \
     netcat-openbsd \
     telnet \
     iputils-ping \
+    # dos2unix（改行コード変換用）
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Gemfileをコピーしてインストール
+# Gemfileをコピーしてプラットフォーム設定とインストール
 COPY Gemfile Gemfile.lock ./
-RUN bundle config set --local deployment 'true' && \
+RUN bundle lock --add-platform x86_64-linux && \
+    bundle config set --local deployment 'true' && \
     bundle config set --local without 'development test' && \
     bundle install
 
 # アプリケーションコードをコピー
 COPY . .
 
-# エントリーポイントスクリプトをコピー
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN dos2unix /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # 本番環境変数
 ENV RAILS_ENV=production
