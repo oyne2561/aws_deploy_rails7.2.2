@@ -4,13 +4,15 @@ name: CI/CD Pipeline
 # このワークフローがいつ実行されるかを定義
 on:
   push:
-    branches: [ main, develop ]  # mainまたはdevelopブランチにプッシュされた時
+    # 絶対に実行されないトリガーを設定し、Github Actionsが走らないようにしている。また走らせたいときはは切り替える。
+    branches: [ "non-existent-branch-never-created" ]
+  #   branches: [ main, develop ]  # mainまたはdevelopブランチにプッシュされた時
 
 # 環境変数の定義（全てのジョブで使用可能）
 env:
   AWS_REGION: ap-northeast-1                 # AWSリージョン（東京）
   ECR_REPOSITORY: todo-app-api               # ECR（Docker画像保存場所）のリポジトリ名
-  ECS_SERVICE: todo-app-api-task-service          # ECS（コンテナ実行環境）のサービス名
+  ECS_SERVICE: todo-app-api-service          # ECS（コンテナ実行環境）のサービス名
   ECS_CLUSTER: todo-app-api-cluster          # ECSクラスター名
   ECS_TASK_DEFINITION: todo-app-api-task     # ECSタスク定義名
 

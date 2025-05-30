@@ -247,21 +247,42 @@ config.force_ssl = false
 config.assume_ssl = false
 ```
 
-## Github Actionsで遭遇したエラー
-x86_64しか`ubuntu-latest`マシンでは、
-ローカルでGemfile.lockを修正する。
-```
+# GitHub Actions でのアーキテクチャ不整合エラーの解決方法
+
+## 問題の概要
+
+GitHub Actions での Docker デプロイ時に、ローカル開発環境（Apple Silicon/ARM64）とデプロイ先（Intel/AMD x86_64）のアーキテクチャが異なることで発生するエラーについて解説します。
+
+## エラーの原因
+
+GitHub Actions のランナーや ECS などのクラウド環境は通常 x86_64 アーキテクチャを使用しますが、ローカルの Apple Silicon Mac では ARM64（aarch64）アーキテクチャを使用します。この不整合により、以下のような問題が発生します：
+
+- Bundle install 時のプラットフォーム不整合
+- Docker イメージの実行時エラー
+- ECS タスクの起動失敗
+
+## 解決手順
+
+### 1. Gemfile.lock のプラットフォーム追加
+
+まず、ローカル環境で `Gemfile.lock` に x86_64-linux プラットフォームを追加します。
+
+```bash
 bundle lock --add-platform x86_64-linux
 ```
-実行後の`Gemfile.lock`
+
+**実行後の `Gemfile.lock`**
 ```
 PLATFORMS
-  aarch64-linux   # ARM64
-  x86_64-linux    # Intel/AMD 64bit ← 新しく追加！
+  aarch64-linux   # ARM64（既存）
+  x86_64-linux    # Intel/AMD 64bit（新規追加）
 ```
 
-`Dockerfile.prod`の修正。
-```
+### 2. Dockerfile の修正
+
+Docker ビルド時の bundle コマンドの順序が重要です。deployment モードを有効にする前にプラットフォームを追加する必要があります。
+
+```dockerfile
 # ❌ 間違った順序（deploymentモードが先だとlockファイル変更不可）
 RUN bundle config set --local deployment 'true' && \
     bundle lock --add-platform x86_64-linux  # エラー！
@@ -273,10 +294,46 @@ RUN bundle config set --local without 'development test' && \
     bundle install --jobs 4
 ```
 
-ECSタスク定義をX86_64に変更。cicd.yml
+**重要なポイント：**
+- `deployment` モードではロックファイルの変更が禁止される
+- プラットフォーム追加は `deployment` モードを有効にする前に実行する
+- `without` オプションで不要な gem グループを除外してビルド時間を短縮
+
+### 3. ECS タスク定義のアーキテクチャ修正
+
+GitHub Actions の CI/CD パイプラインで、ECS タスク定義のアーキテクチャを動的に修正します。
+
+```yaml
+# cicd.yml の一部
+- name: Fix task definition architecture
+  run: |
+    # JSONファイルでcpuArchitectureをX86_64に変更
+    jq '.runtimePlatform.cpuArchitecture = "X86_64"' task-definition.json > task-definition-fixed.json
+    # 修正されたファイルに置き換え
+    mv task-definition-fixed.json task-definition.json
+    
+    # 確認のため修正内容を表示
+    echo "=== 修正されたruntimePlatform ==="
+    jq '.runtimePlatform' task-definition.json
 ```
 
-```
+## 解決のメリット
+
+この対応により以下の利点が得られます：
+
+1. **マルチプラットフォーム対応**: ARM64 と x86_64 両方の環境で動作
+2. **CI/CD の安定化**: アーキテクチャ不整合によるビルドエラーを回避
+3. **デプロイの自動化**: 手動でのタスク定義修正が不要
+
+## 注意点
+
+- ローカルでの `bundle lock --add-platform` 実行後は、必ず `Gemfile.lock` をコミットする
+- ECS 以外のデプロイ先でも同様のアーキテクチャ指定が必要な場合がある
+- Docker のマルチプラットフォームビルドを使用する場合は、別途 `docker buildx` の設定が必要
+
+## まとめ
+
+Apple Silicon Mac での開発が一般的になった現在、アーキテクチャ不整合は頻繁に発生する問題です。適切な順序でのプラットフォーム設定と、CI/CD パイプラインでの動的な修正により、スムーズなデプロイが実現できます。
 
 
 ## タスク定義のjsonファイルをAWSから取得する方法
